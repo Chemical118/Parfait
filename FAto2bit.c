@@ -32,7 +32,7 @@ typedef struct Heap{
 }Heap; //heap
 
 bool isfafile(char *f); //cheak the file is fasta
-char* read_line(FILE *fp); //read one line of the file and return it as a string
+char* read_line(FILE *fp, char st); //read one line of the file and return it as a string
 void read_fafile(FILE *fp, FILE *w_fp); //read the fasta file
 int chr_to_num(char tmp); // ATGCN to 01234
 char num_to_chr(int tmp); //01234 to ATGAN
@@ -80,13 +80,24 @@ bool isfafile(char *f){
     return false;
 }
 
-char* read_line(FILE *fp) {
+char* read_line(FILE *fp, char st) {
+    const int BUFF_SIZE = 100;
+    int ch_cnt = 1;
+    int buff_times = 1;
     char ch_tmp;
-    char *line = NULL;
+    char *line = (char*)malloc(BUFF_SIZE * buff_times * sizeof(char));
+    line[0] = st;
     while( (ch_tmp = getc(fp)) != '\n') {
-//        char line_tmp[1] = {ch_tmp};
-//        strcat(line, line_tmp);
+        line[ch_cnt] = ch_tmp;
+        ch_cnt += 1;
+        if (ch_cnt % 100 == 98) { //prevent overflow when adding '\n' and '\0'
+            buff_times += 1;
+            line = (char*)realloc(line, BUFF_SIZE * buff_times);
+        }
     }
+    line[ch_cnt++] = '\n';
+    line[ch_cnt] = '\0';
+    puts(line);
     return line;
 }
 
@@ -313,10 +324,10 @@ void read_fafile(FILE *fp, FILE *w_fp) {
     int pre_data_num = 0;
     char odd_data_tmp = '\0'; //saving the first char
 
-    while (1) { //all file reading
-        ch_tmp = getc(fp);
+    while ((ch_tmp = getc(fp)) != EOF) { //all file reading
+//        ch_tmp = getc(fp);
         if (ch_tmp == ';' || ch_tmp == '>') { //start of a new data
-            read_line(fp);
+            data_tmp.data_name = read_line(fp, ch_tmp);
             if(data_tmp.data_len != 0) { //if we have some read data
                 Element head = mk_huffman_tree(data_tmp, odd_data_tmp); //making huffman tree
                 printf("%d end mk huffmantree\n",head.freq);
@@ -326,11 +337,13 @@ void read_fafile(FILE *fp, FILE *w_fp) {
                 printf("end destroy heap\n");
                 free(data_tmp.freq_arr);
                 free(data_tmp.file_data);
+                free(data_tmp.data_name);
                 printf("end free\n");
+                write_index_file(data_tmp);
 
                 //initialization
                 data_tmp.data_num = pre_data_num + 1;
-//                data_tmp.data_name = read_line(fp);
+//                data_tmp.data_name = read_line(fp, ch_tmp);
                 data_tmp.freq_arr = (int*)calloc(MAX_NODE, sizeof(int));
                 data_tmp.file_data = (int*)calloc((MAX_LENGTH+10)/2, sizeof(int));
                 data_tmp.total_freq = 0;
@@ -340,8 +353,14 @@ void read_fafile(FILE *fp, FILE *w_fp) {
             }
 
             if (ch_tmp == ';') { //the line after symbol ';' doesn't need
-                read_line(fp);
+                char *line_tmp = read_line(fp, ch_tmp);
+                data_tmp.data_name = realloc(data_tmp.data_name,
+                                             strlen(data_tmp.data_name) + strlen(line_tmp) + 1);
+                strcat(data_tmp.data_name, line_tmp);
+                free(line_tmp);
             }
+
+            data_tmp.data_name[strlen(data_tmp.data_name) - 1] = '\0';
 
 
         } else { //reading the file
@@ -371,6 +390,8 @@ void read_fafile(FILE *fp, FILE *w_fp) {
             destroy_heap(head.pnode);
             free(data_tmp.freq_arr);
             free(data_tmp.file_data);
+            free(data_tmp.data_name);
+            write_index_file(data_tmp);
 
             //initialization
             data_tmp.freq_arr = (int*)calloc(MAX_NODE, sizeof(int));
@@ -378,21 +399,20 @@ void read_fafile(FILE *fp, FILE *w_fp) {
             data_tmp.total_freq = 0;
             data_tmp.data_len = 0;
         }
+    }
 
-        if (ch_tmp == EOF) {
-            if ( data_tmp.data_len != 0 ) {
-                Element head = mk_huffman_tree(data_tmp, odd_data_tmp); //making huffman tree
-                printf("%d end mk huffmantree\n",head.freq);
-                encoding(head, data_tmp, w_fp); //encoding the file
-                printf("%d end encoding\n",data_tmp.data_len);
-                destroy_heap(head.pnode);
-                printf("end destroy heap\n");
-                free(data_tmp.freq_arr);
-                free(data_tmp.file_data);
-                printf("end free\n");
-            }
-            break;
-        }
+    if ( data_tmp.data_len != 0 ) {
+        Element head = mk_huffman_tree(data_tmp, odd_data_tmp); //making huffman tree
+        printf("%d end mk huffmantree\n",head.freq);
+        encoding(head, data_tmp, w_fp); //encoding the file
+        printf("%d end encoding\n",data_tmp.data_len);
+        destroy_heap(head.pnode);
+        printf("end destroy heap\n");
+        free(data_tmp.freq_arr);
+        free(data_tmp.file_data);
+        free(data_tmp.data_name);
+        printf("end free\n");
+        write_index_file(data_tmp);
     }
 }
 
