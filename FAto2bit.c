@@ -41,7 +41,7 @@ void heap_insert(Heap *h, Element node); //insert node to heap
 Element heap_delete(Heap *h); //delete node from heap
 int encoding(Element head, Data_info data_tmp, FILE *w_fp); //encoding file with huffman tree
 void destroy_heap(Heap_node *node);
-void making_huffman_code(Heap_node *node, int len, char *code, char **code_arr);
+void make_huffman_code(Heap_node *node, int len, char *code, char **code_arr);
 void write_index_file(Data_info data_tmp);
 
 int main(int argc, char *argv[]) {
@@ -213,15 +213,15 @@ Element mk_huffman_tree(Data_info data_tmp, char odd_data_tmp) {
     return heap_delete(&heap); //return the head node of huffman tree
 }
 
-void making_huffman_code(Heap_node *node, int len, char *code, char **code_arr) {
+void make_huffman_code(Heap_node *node, int len, char *code, char **code_arr) {
     if (node != NULL) {
 
         len += 1;
         code[len] = '1';
-        making_huffman_code(node->left_node,len,code,code_arr);
+        make_huffman_code(node->left_node, len, code, code_arr);
 
         code[len] = '0';
-        making_huffman_code(node->right_node,len,code,code_arr);
+        make_huffman_code(node->right_node, len, code, code_arr);
 
         code[len] = '\0';
 
@@ -244,7 +244,7 @@ int encoding(Element head, Data_info data_tmp, FILE *w_fp) {
         code_arr[i] = (char*)calloc(100, sizeof(char));
     }
     char *code_str = (char*)calloc(100, sizeof(char));
-    making_huffman_code(head.pnode, -1, code_str, code_arr);
+    make_huffman_code(head.pnode, -1, code_str, code_arr);
 
     write_index_file(data_tmp);
 
@@ -258,8 +258,8 @@ int encoding(Element head, Data_info data_tmp, FILE *w_fp) {
         printf("%s", str);
         len += (int)strlen(str);
         for (int i = 0; str[i]; i++) {
-            buffer = (unsigned char)(buffer << 1);
-            buffer = (unsigned char)(buffer | (str[i] - '0'));
+            buffer = buffer << 1;
+            buffer = buffer | (unsigned char) (str[i] - '0');
             bit_num += 1;
 
             if (bit_num == 8) {
@@ -278,7 +278,7 @@ int encoding(Element head, Data_info data_tmp, FILE *w_fp) {
     }
     if (bit_num != 0) {
         while (bit_num < 8) {
-            buffer = (unsigned char)(buffer << 1);
+            buffer = buffer << 1;
             bit_num += 1;
         }
         fwrite(&buffer, 1, 1, w_fp);
