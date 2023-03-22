@@ -2,8 +2,8 @@
 #include <stdbool.h>
 #include <string.h>
 #include <stdlib.h>
-#define MAX_LENGTH 100000
-#define MAX_NODE 25
+const int MAX_LENGTH = 100000;
+//const int MAX_NODE = 25;
 
 typedef struct Data_info{
     int data_num;
@@ -17,8 +17,7 @@ typedef struct Data_info{
 typedef struct Heap_node{
     struct Heap_node *left_node;
     struct Heap_node *right_node;
-    char ch1;
-    char ch2;
+    char *ch;
 }Heap_node; //A node from heap
 
 typedef struct Element{
@@ -27,27 +26,29 @@ typedef struct Element{
 }Element; //data of heap node
 
 typedef struct Heap{
-    Element heap[MAX_NODE + 10];
+    Element *heap;
     int size;
 }Heap; //heap
 
+int power5(int power);
 bool isfafile(char *f); //cheak the file is fasta
 char* read_line(FILE *fp, char st); //read one line of the file and return it as a string
-void read_fafile(FILE *fp, FILE *w_fp); //read the fasta file
-int chr_to_num(char tmp); // ATGCN to 01234
-char num_to_chr(int tmp); //01234 to ATGAN
-Element mk_huffman_tree(Data_info data_tmp, char odd_data_tmp); //making huffman tree
+void read_fafile(FILE *fp, FILE *w_fp, int tmp_len); //read the fasta file
+int chr_to_num(char tmp);
+int str_to_num(char *str, int tmp_len); // ATGCN to 01234
+char* num_to_chr(int idx, int tmp_len); //01234 to ATGAN
+Element mk_huffman_tree(Data_info data_tmp, char *odd_data_tmp, int tmp_len); //making huffman tree
 void heap_insert(Heap *h, Element node); //insert node to heap
 Element heap_delete(Heap *h); //delete node from heap
-int encoding(Element head, Data_info data_tmp, FILE *w_fp); //encoding file with huffman tree
+int encoding(Element head, Data_info data_tmp, FILE *w_fp, int tmp_len); //encoding file with huffman tree
 void destroy_heap(Heap_node *node);
-void make_huffman_code(Heap_node *node, int len, char *code, char **code_arr);
+void make_huffman_code(Heap_node *node, int len, char *code, char **code_arr, int tmp_len);
 void write_index_file(Data_info data_tmp);
 
 int main(int argc, char *argv[]) {
 
-    if (argc != 2) {
-        printf("We need 1 FASTA File\n");
+    if (argc != 3) {
+        printf("We need 1 FASTA File and one number\n");
         return 0;
     }
 
@@ -63,11 +64,19 @@ int main(int argc, char *argv[]) {
         return 0;
     }
 
+    if (strlen(argv[2]) != 1 || argv[2][0] > '5' || argv[2][0] < '0') {
+        printf("Wrong integer\n");
+        return 0;
+    }
+
     FILE *print_fasta_fp = NULL;
 //    print_fasta_fp = fopen(strcat(argv[1], ".fz"), "bw");
-    print_fasta_fp = fopen("test1.fz", "wb");
+    char *fp_tmp = (char*)calloc(strlen(argv[1]) + 10, sizeof(char));
+    strcpy(fp_tmp, argv[1]);
+    strcat(fp_tmp, ".fz");
+    print_fasta_fp = fopen(fp_tmp, "wb");
 
-    read_fafile(fasta_fp, print_fasta_fp);
+    read_fafile(fasta_fp, print_fasta_fp, (int)(argv[2][0]-'0'));
     fclose(fasta_fp);
 }
 
@@ -97,8 +106,16 @@ char* read_line(FILE *fp, char st) {
     }
     line[ch_cnt++] = '\n';
     line[ch_cnt] = '\0';
-    puts(line);
+//    puts(line);
     return line;
+}
+
+int power5(int power) {
+    int value = 1;
+    for (int i = 0; i < power; i++) {
+        value *= 5;
+    }
+    return value;
 }
 
 int chr_to_num(char tmp) {
@@ -115,18 +132,42 @@ int chr_to_num(char tmp) {
     } else return -1;
 }
 
-char num_to_chr(int tmp) {
-    if (tmp == 0) {
-        return 'A';
-    } else if (tmp == 1) {
-        return 'T';
-    } else if (tmp == 2) {
-        return 'G';
-    } else if (tmp == 3) {
-        return 'C';
-    } else if (tmp == 4){
-        return 'N';
-    } else return '\0';
+int str_to_num(char *str, int tmp_len) {
+    int value = 0;
+    int k = 1;
+    for (int i = tmp_len - 1; i >= 0; i--) {
+        char tmp = str[i];
+        value += chr_to_num(tmp) * k;
+        if (chr_to_num(tmp) == -1) {
+            return -1;
+        }
+        k *= 5;
+    }
+    return value;
+}
+
+char* num_to_chr(int idx, int tmp_len) {
+    char *value = (char*)calloc((tmp_len + 2), sizeof(char));
+    int k = 1;
+    for (int i = 1; i < tmp_len; i++, k *= 5);
+    for (int i = 1; i <= tmp_len; i++, k /= 5) {
+        int num = idx/k;
+        idx = idx - num * k;
+        if (num == 0) {
+            value[i] = 'A';
+        } else if (num == 1) {
+            value[i] = 'T';
+        } else if (num == 2) {
+            value[i] = 'G';
+        } else if (num == 3) {
+            value[i] = 'C';
+        } else if (num == 4) {
+            value[i] = 'N';
+        } else {
+            return NULL;
+        }
+    }
+    return value + 1;
 }
 
 void heap_insert(Heap *h, Element node) {
@@ -173,32 +214,40 @@ void destroy_heap(Heap_node *node) {
     free(node);
 }
 
-Element mk_huffman_tree(Data_info data_tmp, char odd_data_tmp) {
+Element mk_huffman_tree(Data_info data_tmp, char *odd_data_tmp, int tmp_len) {
+    const int MAX_NODE = power5(tmp_len);
+
     Heap heap; //min heap
     heap.size = 0;
+    heap.heap = (Element*)malloc((MAX_NODE + 10) * sizeof(Element));
     Element e1,e2; //minimum 2 elements
-    if (odd_data_tmp != '\0') { //if the data is odd
-        int index = chr_to_num(odd_data_tmp) * 5 + chr_to_num('A'); //add 'A' at the end
+    printf("##%d\n",(int) strlen(odd_data_tmp));
+    if (strlen(odd_data_tmp) != 0) { //if the data is odd
+        for (int i = (int)strlen(odd_data_tmp); i <= tmp_len; i++) {
+            odd_data_tmp[i] = 'A';
+        }
+        int index = str_to_num(odd_data_tmp + 1, tmp_len); //add 'A' at the end
         data_tmp.freq_arr[index] += 1;
         data_tmp.file_data[data_tmp.total_freq] = index;
         data_tmp.total_freq += 1;
     }
+    printf("%s\n",odd_data_tmp + 1);
 
     for (int idx = 0; idx < MAX_NODE; idx++) { //first heap node
         if (data_tmp.freq_arr[idx] == 0) continue; //if it doesn't appear at file
 
         Heap_node *node = (Heap_node*)malloc(sizeof(Heap_node)); //new node
+        node->ch = (char*)calloc((tmp_len + 1), sizeof(char));
         Element ele; //node's info element
         ele.freq = data_tmp.freq_arr[idx];
-        node->ch1 = num_to_chr(idx/5); //first char
-        node->ch2 = num_to_chr(idx%5); //second char
+        node->ch = num_to_chr(idx, tmp_len);
         ele.pnode = node; //Element -> Heap node
         //it is leaf node
         node->left_node = NULL;
         node->right_node = NULL;
 
         heap_insert(&heap, ele);
-        printf("%d %c%c : %d\n",idx,node->ch1,node->ch2,ele.freq);
+        printf("%d %s : %d\n",idx,node->ch,ele.freq);
     }
 
     //making huffman tree
@@ -224,27 +273,28 @@ Element mk_huffman_tree(Data_info data_tmp, char odd_data_tmp) {
     return heap_delete(&heap); //return the head node of huffman tree
 }
 
-void make_huffman_code(Heap_node *node, int len, char *code, char **code_arr) {
+void make_huffman_code(Heap_node *node, int len, char *code, char **code_arr, int tmp_len) {
     if (node != NULL) {
 
         len += 1;
         code[len] = '1';
-        make_huffman_code(node->left_node, len, code, code_arr);
+        make_huffman_code(node->left_node, len, code, code_arr, tmp_len);
 
         code[len] = '0';
-        make_huffman_code(node->right_node, len, code, code_arr);
+        make_huffman_code(node->right_node, len, code, code_arr, tmp_len);
 
         code[len] = '\0';
 
         if (node->left_node == NULL && node->right_node == NULL) {
-            printf("%c%c\n",node->ch1,node->ch2);
-            strcpy(code_arr[chr_to_num(node->ch1) * 5 + chr_to_num(node->ch2)], code);
+            printf("%s\n",node->ch);
+            strcpy(code_arr[str_to_num(node->ch, tmp_len)], code);
             printf("code %s\n",code);
         }
     }
 }
 
-int encoding(Element head, Data_info data_tmp, FILE *w_fp) {
+int encoding(Element head, Data_info data_tmp, FILE *w_fp, int tmp_len) {
+    const int MAX_NODE = power5(tmp_len);
     int len = 0; //number of bits
     unsigned char buffer = '\0'; //8bit -> 1byte
     int bit_num = 0; //how many bits did we used at buffer
@@ -255,7 +305,7 @@ int encoding(Element head, Data_info data_tmp, FILE *w_fp) {
         code_arr[i] = (char*)calloc(100, sizeof(char));
     }
     char *code_str = (char*)calloc(100, sizeof(char));
-    make_huffman_code(head.pnode, -1, code_str, code_arr);
+    make_huffman_code(head.pnode, -1, code_str, code_arr, tmp_len);
 
     write_index_file(data_tmp);
 
@@ -264,9 +314,9 @@ int encoding(Element head, Data_info data_tmp, FILE *w_fp) {
     }
 
     char *str = (char*)calloc(100, sizeof(char));
-    for (int idx = 0; data_tmp.file_data[idx]; idx++) {
+    for (int idx = 0; idx < data_tmp.total_freq; idx++) {
         strcpy(str, code_arr[data_tmp.file_data[idx]]);
-        printf("%s", str);
+//        printf("%s", str);
         len += (int)strlen(str);
         for (int i = 0; str[i]; i++) {
             buffer = buffer << 1;
@@ -303,14 +353,18 @@ int encoding(Element head, Data_info data_tmp, FILE *w_fp) {
 
     printf("\n");
 
+    for (int i = 0; i < MAX_NODE; i++) {
+        free(code_arr[i]);
+    }
     free(code_arr);
     free(code_str);
 
     return len;
 }
 
-void read_fafile(FILE *fp, FILE *w_fp) {
+void read_fafile(FILE *fp, FILE *w_fp, int tmp_len) {
 
+    const int MAX_NODE = power5(tmp_len);
     char ch_tmp;
     //data info
 
@@ -318,20 +372,25 @@ void read_fafile(FILE *fp, FILE *w_fp) {
     data_tmp.total_freq = 0;
     data_tmp.data_len = 0;
     data_tmp.data_num = 0;
-    data_tmp.freq_arr = (int*)calloc(MAX_NODE, sizeof(int));
+    data_tmp.freq_arr = (int*)calloc(MAX_NODE + 10, sizeof(int));
     data_tmp.file_data = (int*)calloc((MAX_LENGTH+10)/2, sizeof(int));
 
     int pre_data_num = 0;
-    char odd_data_tmp = '\0'; //saving the first char
+    char *odd_data_tmp = (char*)calloc(tmp_len + 2, sizeof(char)); //saving the first char
+    odd_data_tmp[0] = '0';
+    for (int i = 1; i <= tmp_len + 1; i++) {
+        odd_data_tmp[i] = '\0';
+    }
 
     while ((ch_tmp = getc(fp)) != EOF) { //all file reading
 //        ch_tmp = getc(fp);
+        int t  = 1;
         if (ch_tmp == ';' || ch_tmp == '>') { //start of a new data
-            data_tmp.data_name = read_line(fp, ch_tmp);
+
             if(data_tmp.data_len != 0) { //if we have some read data
-                Element head = mk_huffman_tree(data_tmp, odd_data_tmp); //making huffman tree
+                Element head = mk_huffman_tree(data_tmp, odd_data_tmp, tmp_len); //making huffman tree
                 printf("%d end mk huffmantree\n",head.freq);
-                encoding(head, data_tmp ,w_fp); //encoding the file
+                encoding(head, data_tmp ,w_fp, tmp_len); //encoding the file
                 printf("%d end encoding\n",data_tmp.data_len);
                 destroy_heap(head.pnode);
                 printf("end destroy heap\n");
@@ -343,15 +402,14 @@ void read_fafile(FILE *fp, FILE *w_fp) {
 
                 //initialization
                 data_tmp.data_num = pre_data_num + 1;
-//                data_tmp.data_name = read_line(fp, ch_tmp);
-                data_tmp.freq_arr = (int*)calloc(MAX_NODE, sizeof(int));
+                data_tmp.freq_arr = (int*)calloc(MAX_NODE + 10, sizeof(int));
                 data_tmp.file_data = (int*)calloc((MAX_LENGTH+10)/2, sizeof(int));
                 data_tmp.total_freq = 0;
                 data_tmp.data_len = 0;
                 pre_data_num += 1;
                 printf("end init\n\n\n");
             }
-
+            data_tmp.data_name = read_line(fp, ch_tmp);
             if (ch_tmp == ';') { //the line after symbol ';' doesn't need
                 char *line_tmp = read_line(fp, ch_tmp);
                 data_tmp.data_name = realloc(data_tmp.data_name,
@@ -370,31 +428,33 @@ void read_fafile(FILE *fp, FILE *w_fp) {
             } //don't read enter
             else {
                 data_tmp.data_len += 1;
-                if (data_tmp.data_len % 2 == 1) { //if it is the first char
-                    odd_data_tmp = ch_tmp;
-                } else { //if it is the second char
-                    int index = chr_to_num(odd_data_tmp)*5+chr_to_num(ch_tmp);
-                    odd_data_tmp = '\0';
+                if (data_tmp.data_len % tmp_len == 0) { //if it is the first char
+                    odd_data_tmp[tmp_len] = ch_tmp;
+                    int index = str_to_num(odd_data_tmp + 1, tmp_len);
+                    for (int i = 1; i <= tmp_len + 1; i++) {
+                        odd_data_tmp[i] = '\0';
+                    }
                     data_tmp.freq_arr[index] += 1;
                     data_tmp.file_data[data_tmp.total_freq] = index; //recoding the file info
-                    printf("file_data, idx:%d, %d\n",data_tmp.total_freq,index);
+//                    printf("file_data, idx:%d, %d\n",data_tmp.total_freq,index);
                     data_tmp.total_freq += 1;
+                } else { //if it is the second char
+                    odd_data_tmp[data_tmp.data_len % tmp_len] = ch_tmp; // record from index 1
                 }
             }
         }
 
         if (data_tmp.data_len == MAX_LENGTH) { //if we read 'MAX_LENGTH' number of char
-            Element head = mk_huffman_tree(data_tmp, odd_data_tmp); //make huffman tree
-            encoding(head, data_tmp, w_fp); //encoding the file
+            Element head = mk_huffman_tree(data_tmp, odd_data_tmp, tmp_len); //make huffman tree
+            encoding(head, data_tmp, w_fp, tmp_len); //encoding the file
             printf("%d end encoding",data_tmp.data_len);
             destroy_heap(head.pnode);
             free(data_tmp.freq_arr);
             free(data_tmp.file_data);
-            free(data_tmp.data_name);
             write_index_file(data_tmp);
 
             //initialization
-            data_tmp.freq_arr = (int*)calloc(MAX_NODE, sizeof(int));
+            data_tmp.freq_arr = (int*)calloc(MAX_NODE + 10, sizeof(int));
             data_tmp.file_data = (int*)calloc((MAX_LENGTH+10)/2, sizeof(int));
             data_tmp.total_freq = 0;
             data_tmp.data_len = 0;
@@ -402,9 +462,9 @@ void read_fafile(FILE *fp, FILE *w_fp) {
     }
 
     if ( data_tmp.data_len != 0 ) {
-        Element head = mk_huffman_tree(data_tmp, odd_data_tmp); //making huffman tree
+        Element head = mk_huffman_tree(data_tmp, odd_data_tmp, tmp_len); //making huffman tree
         printf("%d end mk huffmantree\n",head.freq);
-        encoding(head, data_tmp, w_fp); //encoding the file
+        encoding(head, data_tmp, w_fp, tmp_len); //encoding the file
         printf("%d end encoding\n",data_tmp.data_len);
         destroy_heap(head.pnode);
         printf("end destroy heap\n");
@@ -414,6 +474,8 @@ void read_fafile(FILE *fp, FILE *w_fp) {
         printf("end free\n");
         write_index_file(data_tmp);
     }
+
+    free(odd_data_tmp);
 }
 
 void write_index_file(Data_info data_tmp) {
