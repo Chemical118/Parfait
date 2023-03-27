@@ -35,7 +35,7 @@ bool isfafile(char *f); //cheak the file is fasta
 char* read_line(FILE *fp, char st); //read one line of the file and return it as a string
 void read_fafile(FILE *fp, FILE *w_fp, int tmp_len); //read the fasta file
 int chr_to_num(char tmp);
-int str_to_num(char *str, int tmp_len); // ATGCN to 01234
+int str_to_num(const char *str, int tmp_len); // ATGCN to 01234
 char* num_to_chr(int idx, int tmp_len); //01234 to ATGAN
 Element mk_huffman_tree(Data_info data_tmp, char *odd_data_tmp, int tmp_len); //making huffman tree
 void heap_insert(Heap *h, Element node); //insert node to heap
@@ -64,7 +64,7 @@ int main(int argc, char *argv[]) {
         return 0;
     }
 
-    if (strlen(argv[2]) != 1 || argv[2][0] > '5' || argv[2][0] < '0') {
+    if (strlen(argv[2]) != 1 || argv[2][0] > '6' || argv[2][0] < '0') {
         //printf("Wrong integer\n");
         return 0;
     }
@@ -106,7 +106,7 @@ char* read_line(FILE *fp, char st) {
     }
     line[ch_cnt++] = '\n';
     line[ch_cnt] = '\0';
-    puts(line);
+    //puts(line);
     return line;
 }
 
@@ -132,7 +132,7 @@ int chr_to_num(char tmp) {
     } else return -1;
 }
 
-int str_to_num(char *str, int tmp_len) {
+int str_to_num(const char *str, int tmp_len) {
     int value = 0;
     int k = 1;
     for (int i = tmp_len - 1; i >= 0; i--) {
