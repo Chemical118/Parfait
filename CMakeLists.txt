@@ -3,4 +3,4 @@ project(Parfait C)
 
 set(CMAKE_C_STANDARD 99)
 
-add_executable(Parfait main.c)
+add_executable(Parfait FAto2bit.c)
