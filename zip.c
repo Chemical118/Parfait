@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <stdlib.h>
 #include <stdbool.h>
 #include <string.h>
 #include <stdlib.h>
@@ -8,41 +9,72 @@
 const int MAX_LENGTH = 100000;
 //const int MAX_NODE = 25;
 
+static int power5(int power);
+static bool isfafile(char *f); //cheak the file is fasta
+static char* read_line(FILE *fp, char st); //read one line of the file and return it as a string
+static void read_fafile(FILE *fp, FILE *w_fp, int tmp_len); //read the fasta file
+static int chr_to_num(char tmp);
+static int str_to_num(const char *str, int tmp_len); // ATGCN to 01234
+static char* num_to_chr(int idx, int tmp_len); //01234 to ATGAN
+static Element mk_huffman_tree(Data_info data_tmp, char *odd_data_tmp, int tmp_len); //making huffman tree
+static void heap_insert(Heap *h, Element node); //insert node to heap
+static Element heap_delete(Heap *h); //delete node from heap
+static int encoding(Element head, Data_info data_tmp, FILE *w_fp, int tmp_len); //encoding file with huffman tree
+static void destroy_heap(Heap_node *node);
+static void make_huffman_code(Heap_node *node, int len, char *code, char **code_arr, int tmp_len);
+static void write_index_file(Data_info data_tmp);
+int main_zip(int argc, char *argv[]);
+
 // verbose level
 static int verbose_level = 0;
 
-int main_zip(int argc, char *argv[]) {
+static int usage(FILE *fp, int status) {
+    fprintf(fp, "test\n");
+    return status;
+}
 
-    if (argc != 3) {
-        //printf("We need 1 FASTA File and one number\n");
-        return 1;
+
+int main_zip(int argc, char *argv[]) {
+    static const struct option loptions[] = {
+        {"help", no_argument, NULL, 'h'},
+        {"force", no_argument, NULL, 'f'},
+        {"reindex", no_argument, NULL, 'r'},
+        {"keep", no_argument, NULL, 'k'},
+        {"verbose", no_argument, NULL, 'v'},
+        {"encode_length", required_argument, NULL, 'l'},
+        {NULL, no_argument, NULL, 0}
+    };
+
+    int c, encode_length = 3;
+    bool is_force = false, reindex = false, keep = false;
+
+    if (argc == 1) return usage(stderr, 1);
+
+    while ((c = getopt_long(argc, argv, "hfrkvl:", loptions, NULL)) >= 0) {
+        switch (c) {
+            case 'h': return usage(stdout, 0);
+            case '?': return usage(stdout, 1);
+            case 'l': encode_length = atoi(optarg); break;
+            case 'f': is_force = true; break;
+            case 'k': keep = true; break;
+            case 'v': verbose_level += 1; break;
+        }
     }
 
     FILE *fasta_fp = NULL;
-    fasta_fp = fopen(argv[1], "r");
+    fasta_fp = fopen(argv[optind], "r");
     if (fasta_fp == NULL) {
-        //printf("File Reading ERROR\n");
-        return 1;
-    }
-
-    if (isfafile(argv[1]) == false) {
-        //printf("Not a FASTA File\n");
-        return 1;
-    }
-
-    if (strlen(argv[2]) != 1 || argv[2][0] > '6' || argv[2][0] < '0') {
-        //printf("Wrong integer\n");
+        fprintf(stderr, "Could not open file: %s\n", argv[optind]);
         return 1;
     }
 
     FILE *print_fasta_fp = NULL;
-//    print_fasta_fp = fopen(strcat(argv[1], ".fz"), "bw");
-    char *filename = (char*)malloc((strlen(argv[1]) + 5) * sizeof(char));
-    strcpy(filename, argv[1]);
+    char *filename = (char*)malloc((strlen(argv[optind]) + 5) * sizeof(char));
+    strcpy(filename, argv[optind]);
     strcat(filename, ".fz");
     print_fasta_fp = fopen(filename, "wb");
 
-    read_fafile(fasta_fp, print_fasta_fp, (int)(argv[2][0]-'0'));
+    read_fafile(fasta_fp, print_fasta_fp, encode_length);
     fclose(fasta_fp);
     return 0;
 }
