@@ -2,71 +2,53 @@
 #include <stdbool.h>
 #include <string.h>
 #include <stdlib.h>
+#include <getopt.h>
+#include "zip.h"
+
 const int MAX_LENGTH = 100000;
 //const int MAX_NODE = 25;
 
-typedef struct Data_info{
-    int data_num;
-    char *data_name;
-    int *freq_arr;
-    int *file_data;
-    int total_freq;
-    int data_len;
-}Data_info; //data about the fasta file
+static int power5(int power);
+static bool isfafile(char *f); //cheak the file is fasta
+static char* read_line(FILE *fp, char st); //read one line of the file and return it as a string
+static void read_fafile(FILE *fp, FILE *w_fp, int tmp_len); //read the fasta file
+static int chr_to_num(char tmp);
+static int str_to_num(const char *str, int tmp_len); // ATGCN to 01234
+static char* num_to_chr(int idx, int tmp_len); //01234 to ATGAN
+static Element mk_huffman_tree(Data_info data_tmp, char *odd_data_tmp, int tmp_len); //making huffman tree
+static void heap_insert(Heap *h, Element node); //insert node to heap
+static Element heap_delete(Heap *h); //delete node from heap
+static int encoding(Element head, Data_info data_tmp, FILE *w_fp, int tmp_len); //encoding file with huffman tree
+static void destroy_heap(Heap_node *node);
+static void make_huffman_code(Heap_node *node, int len, char *code, char **code_arr, int tmp_len);
+static void write_index_file(Data_info data_tmp);
+int main_zip(int argc, char *argv[]);
 
-typedef struct Heap_node{
-    struct Heap_node *left_node;
-    struct Heap_node *right_node;
-    char *ch;
-}Heap_node; //A node from heap
-
-typedef struct Element{
-    int freq;
-    Heap_node *pnode;
-}Element; //data of heap node
-
-typedef struct Heap{
-    Element *heap;
-    int size;
-}Heap; //heap
-
-int power5(int power);
-bool isfafile(char *f); //cheak the file is fasta
-char* read_line(FILE *fp, char st); //read one line of the file and return it as a string
-void read_fafile(FILE *fp, FILE *w_fp, int tmp_len); //read the fasta file
-int chr_to_num(char tmp);
-int str_to_num(const char *str, int tmp_len); // ATGCN to 01234
-char* num_to_chr(int idx, int tmp_len); //01234 to ATGAN
-Element mk_huffman_tree(Data_info data_tmp, char *odd_data_tmp, int tmp_len); //making huffman tree
-void heap_insert(Heap *h, Element node); //insert node to heap
-Element heap_delete(Heap *h); //delete node from heap
-int encoding(Element head, Data_info data_tmp, FILE *w_fp, int tmp_len); //encoding file with huffman tree
-void destroy_heap(Heap_node *node);
-void make_huffman_code(Heap_node *node, int len, char *code, char **code_arr, int tmp_len);
-void write_index_file(Data_info data_tmp);
+// verbose level
+static int verbose_level = 0;
 
 int main_zip(int argc, char *argv[]) {
 
     if (argc != 3) {
         //printf("We need 1 FASTA File and one number\n");
-        return 0;
+        return 1;
     }
 
     FILE *fasta_fp = NULL;
     fasta_fp = fopen(argv[1], "r");
     if (fasta_fp == NULL) {
         //printf("File Reading ERROR\n");
-        return 0;
+        return 1;
     }
 
     if (isfafile(argv[1]) == false) {
         //printf("Not a FASTA File\n");
-        return 0;
+        return 1;
     }
 
     if (strlen(argv[2]) != 1 || argv[2][0] > '6' || argv[2][0] < '0') {
         //printf("Wrong integer\n");
-        return 0;
+        return 1;
     }
 
     FILE *print_fasta_fp = NULL;
@@ -78,9 +60,10 @@ int main_zip(int argc, char *argv[]) {
 
     read_fafile(fasta_fp, print_fasta_fp, (int)(argv[2][0]-'0'));
     fclose(fasta_fp);
+    return 0;
 }
 
-bool isfafile(char *f){
+static bool isfafile(char *f){
     char *point = NULL;
     point = strrchr(f, '.'); //last '.' in the file name
     if (strcmp(point, ".fasta") == 0 || strcmp(point, ".fa") == 0) {
@@ -89,7 +72,7 @@ bool isfafile(char *f){
     return false;
 }
 
-char* read_line(FILE *fp, char st) {
+static char* read_line(FILE *fp, char st) {
     const int BUFF_SIZE = 100;
     int ch_cnt = 1;
     int buff_times = 1;
@@ -110,7 +93,7 @@ char* read_line(FILE *fp, char st) {
     return line;
 }
 
-int power5(int power) {
+static int power5(int power) {
     int value = 1;
     for (int i = 0; i < power; i++) {
         value *= 5;
@@ -118,7 +101,7 @@ int power5(int power) {
     return value;
 }
 
-int chr_to_num(char tmp) {
+static int chr_to_num(char tmp) {
     if (tmp == 'A' || tmp == 'a') {
         return 0;
     } else if (tmp == 'T' || tmp == 't') {
@@ -132,7 +115,7 @@ int chr_to_num(char tmp) {
     } else return -1;
 }
 
-int str_to_num(const char *str, int tmp_len) {
+static int str_to_num(const char *str, int tmp_len) {
     int value = 0;
     int k = 1;
     for (int i = tmp_len - 1; i >= 0; i--) {
@@ -146,7 +129,7 @@ int str_to_num(const char *str, int tmp_len) {
     return value;
 }
 
-char* num_to_chr(int idx, int tmp_len) {
+static char* num_to_chr(int idx, int tmp_len) {
     char *value = (char*)calloc((tmp_len + 2), sizeof(char));
     int k = 1;
     for (int i = 1; i < tmp_len; i++, k *= 5);
@@ -170,7 +153,7 @@ char* num_to_chr(int idx, int tmp_len) {
     return value + 1;
 }
 
-void heap_insert(Heap *h, Element node) {
+static void heap_insert(Heap *h, Element node) {
     int index = h->size + 1;
     while ( (index != 1) && (node.freq < h->heap[index/2].freq) ) {
         h->heap[index] = h->heap[index/2];
@@ -180,7 +163,7 @@ void heap_insert(Heap *h, Element node) {
     h->size += 1;
 }
 
-Element heap_delete(Heap *h) {
+static Element heap_delete(Heap *h) {
     int parent = 1, child = 2;
     Element node, tmp;
 
@@ -206,7 +189,7 @@ Element heap_delete(Heap *h) {
     return node;
 }
 
-void destroy_heap(Heap_node *node) {
+static void destroy_heap(Heap_node *node) {
     if (node == NULL) return;
 
     destroy_heap(node->left_node);
@@ -214,7 +197,7 @@ void destroy_heap(Heap_node *node) {
     free(node);
 }
 
-Element mk_huffman_tree(Data_info data_tmp, char *odd_data_tmp, int tmp_len) {
+static Element mk_huffman_tree(Data_info data_tmp, char *odd_data_tmp, int tmp_len) {
     const int MAX_NODE = power5(tmp_len);
 
     Heap heap; //min heap
@@ -273,7 +256,7 @@ Element mk_huffman_tree(Data_info data_tmp, char *odd_data_tmp, int tmp_len) {
     return heap_delete(&heap); //return the head node of huffman tree
 }
 
-void make_huffman_code(Heap_node *node, int len, char *code, char **code_arr, int tmp_len) {
+static void make_huffman_code(Heap_node *node, int len, char *code, char **code_arr, int tmp_len) {
     if (node != NULL) {
 
         len += 1;
@@ -293,7 +276,7 @@ void make_huffman_code(Heap_node *node, int len, char *code, char **code_arr, in
     }
 }
 
-int encoding(Element head, Data_info data_tmp, FILE *w_fp, int tmp_len) {
+static int encoding(Element head, Data_info data_tmp, FILE *w_fp, int tmp_len) {
     const int MAX_NODE = power5(tmp_len);
     int len = 0; //number of bits
     unsigned char buffer = '\0'; //8bit -> 1byte
@@ -361,7 +344,7 @@ int encoding(Element head, Data_info data_tmp, FILE *w_fp, int tmp_len) {
     return len;
 }
 
-void read_fafile(FILE *fp, FILE *w_fp, int tmp_len) {
+static void read_fafile(FILE *fp, FILE *w_fp, int tmp_len) {
 
     const int MAX_NODE = power5(tmp_len);
     char ch_tmp;
@@ -382,8 +365,6 @@ void read_fafile(FILE *fp, FILE *w_fp, int tmp_len) {
     }
 
     while ((ch_tmp = getc(fp)) != EOF) { //all file reading
-//        ch_tmp = getc(fp);
-        int t  = 1;
         if (ch_tmp == ';' || ch_tmp == '>') { //start of a new data
 
             if(data_tmp.data_len != 0) { //if we have some read data
@@ -477,6 +458,6 @@ void read_fafile(FILE *fp, FILE *w_fp, int tmp_len) {
     free(odd_data_tmp);
 }
 
-void write_index_file(Data_info data_tmp) {
+static void write_index_file(Data_info data_tmp) {
 
 }

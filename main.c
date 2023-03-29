@@ -26,7 +26,8 @@ int main(int argc, char *argv[]) {
 
     int ret = 0;
 
-    if (strcmp(argv[1], "zip") == 0)    ret = main_zip(argc - 1, argv + 1);
+    if (strcmp(argv[1], "zip") == 0)                    ret = main_zip(argc - 1, argv + 1);
+//    else if (strcmp(argv[1], "unzip") == 0)               ret = main_unzip(argc - 1, argv + 1);
     else {
         fprintf(stderr, "unrecognized command '%s'\n", argv[1]);
         return 1;
