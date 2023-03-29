@@ -8,22 +8,6 @@
 const int MAX_LENGTH = 100000;
 //const int MAX_NODE = 25;
 
-static int power5(int power);
-static bool isfafile(char *f); //cheak the file is fasta
-static char* read_line(FILE *fp, char st); //read one line of the file and return it as a string
-static void read_fafile(FILE *fp, FILE *w_fp, int tmp_len); //read the fasta file
-static int chr_to_num(char tmp);
-static int str_to_num(const char *str, int tmp_len); // ATGCN to 01234
-static char* num_to_chr(int idx, int tmp_len); //01234 to ATGAN
-static Element mk_huffman_tree(Data_info data_tmp, char *odd_data_tmp, int tmp_len); //making huffman tree
-static void heap_insert(Heap *h, Element node); //insert node to heap
-static Element heap_delete(Heap *h); //delete node from heap
-static int encoding(Element head, Data_info data_tmp, FILE *w_fp, int tmp_len); //encoding file with huffman tree
-static void destroy_heap(Heap_node *node);
-static void make_huffman_code(Heap_node *node, int len, char *code, char **code_arr, int tmp_len);
-static void write_index_file(Data_info data_tmp);
-int main_zip(int argc, char *argv[]);
-
 // verbose level
 static int verbose_level = 0;
 
@@ -53,17 +37,17 @@ int main_zip(int argc, char *argv[]) {
 
     FILE *print_fasta_fp = NULL;
 //    print_fasta_fp = fopen(strcat(argv[1], ".fz"), "bw");
-    char *fp_tmp = (char*)calloc(strlen(argv[1]) + 10, sizeof(char));
-    strcpy(fp_tmp, argv[1]);
-    strcat(fp_tmp, ".fz");
-    print_fasta_fp = fopen(fp_tmp, "wb");
+    char *filename = (char*)malloc((strlen(argv[1]) + 5) * sizeof(char));
+    strcpy(filename, argv[1]);
+    strcat(filename, ".fz");
+    print_fasta_fp = fopen(filename, "wb");
 
     read_fafile(fasta_fp, print_fasta_fp, (int)(argv[2][0]-'0'));
     fclose(fasta_fp);
     return 0;
 }
 
-static bool isfafile(char *f){
+static bool isfafile(char *f) {
     char *point = NULL;
     point = strrchr(f, '.'); //last '.' in the file name
     if (strcmp(point, ".fasta") == 0 || strcmp(point, ".fa") == 0) {
@@ -416,7 +400,7 @@ static void read_fafile(FILE *fp, FILE *w_fp, int tmp_len) {
                     }
                     data_tmp.freq_arr[index] += 1;
                     data_tmp.file_data[data_tmp.total_freq] = index; //recoding the file info
-//                    //printf("file_data, idx:%d, %d\n",data_tmp.total_freq,index);
+                    //printf("file_data, idx:%d, %d\n",data_tmp.total_freq,index);
                     data_tmp.total_freq += 1;
                 } else { //if it is the second char
                     odd_data_tmp[data_tmp.data_len % tmp_len] = ch_tmp; // record from index 1
